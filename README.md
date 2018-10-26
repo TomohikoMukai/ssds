@@ -1,5 +1,5 @@
 # SSDS for Maya 2018
-本コードは、[Sampling-based Rig Conversion into Non-rigid Helper Bones](https://mukai-lab.org/publications/i3d2018/ "SSDS paper")で提案している"Skinning Decomposition with Similarity Transformations (SSDS)"のMaya2018用プラグイン実装のサンプルです。
+本コードは、[Sampling-based Rig Conversion into Non-rigid Helper Bones](https://mukai-lab.org/publications/i3d2018/ "SSDS paper")で提案している"Skinning Decomposition with Similarity Transformations (SSDS)"のMaya2018用プラグイン実装のサンプルです。任意のメッシュアニメーションを、ボーンアニメーション（平行移動＋回転＋スケール）に変換します。[SSDR4Maya](https://github.com/TomohikoMukai/ssdr4maya)の上位版です。
 
 - Tomohiko Mukai, Sampling-based Rig Conversion into Non-rigid Helper Bones, Proceedings of the ACM on Computer Graphics and Interactive Techniques, 1(1), Article 13. (ACM SIGGRAPH Symposium on
 Interactive 3D Graphics and Games 2018).
