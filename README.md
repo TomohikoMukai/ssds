@@ -9,8 +9,12 @@ modules/ssds2018フォルダ一式を、Maya2018のモジュールフォルダ�
 
 ![インストール](https://github.com/TomohikoMukai/ssds/blob/image/install.png)
 
+また、numpyをMAYA_SCRIPTS_PATHが通ったフォルダにインストールしておく必要もあります。Maya2018で動作するバイナリは[このページ](https://mukai-lab.org/library/mayanumpy/)の最下部に公開しています。
+
+![numpy](https://github.com/TomohikoMukai/ssds/blob/image/numpy.png)
+
 ## 使い方
-ボーンアニメーションに変換したいメッシュを選択した上で、使用するボーン、トランスフォーム種別（平行移動のみ、平行移動＋回転、平行移動＋回転＋スケール）を選択して実行します。
+plugin manager から「mlSSDS.py」をロードすると、メニューから「MukaiLab→SSDS」を起動できるようになります。その後、ボーンアニメーションに変換したいメッシュを選択した上で、使用するボーン、トランスフォーム種別（平行移動のみ、平行移動＋回転、平行移動＋回転＋スケール）を選択して実行します。
 
 ![使い方](https://github.com/TomohikoMukai/ssds/blob/image/execute.png)
 
