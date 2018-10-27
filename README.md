@@ -22,5 +22,8 @@ plugin manager から「mlSSDS.py」をロードすると、メニューから�
 
 ![実行結果](https://github.com/TomohikoMukai/ssds/blob/image/result.png)
 
+## 動作環境
+Windows 10 + Maya 2018 (無印)の環境でのみ開発・動作確認しています。その他の環境については未サポートです。
+
 ## ソースコードについて
 研究用途・商用利用でご興味のある方は contact@mukai-lab.org までご連絡ください。
