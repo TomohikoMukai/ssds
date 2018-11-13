@@ -7,7 +7,7 @@ def maya_useNewAPI(): pass
 
 
 def initializePlugin(plugin):
-    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.2018.10.27')
+    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.2018.11.15')
     try:
         createUI()
     except: raise

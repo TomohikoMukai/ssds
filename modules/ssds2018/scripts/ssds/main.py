@@ -41,8 +41,8 @@ def getMesh():
     return meshPaths
 
 
-def bindToSkin(meshPaths, initPos,
-               skinIndex, skinWeight, skinJnts, numMaxInfluences):
+def bindToSkin(meshPaths, skinIndex, skinWeight,
+              skinJnts, numMaxInfluences):
     jntNames = [sj.name for sj in skinJnts]
     for sj in skinJnts:
         m = om.MMatrix(sj.bindPose.tolist())
@@ -185,19 +185,24 @@ def build(numJoints = 4,
     srcMeshPaths = getMesh()
     if len(srcMeshPaths) == 0:
         raise Exception('Select mesh')
-
-    om.MGlobal.displayInfo('SSDS 2018.10.27')
+    srcMeshNames = []
+    for p in srcMeshPaths:
+        srcMeshNames.append(om.MFnMesh(p).name())
+    om.MGlobal.displayInfo('SSDS 2018.11.15')
     om.MGlobal.displayInfo(' # joints: ' + str(numJoints))
     om.MGlobal.displayInfo(' transform type: ' + str(transformType))
+    
+    # move its center of mass to the world origin
     oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
-    shapeSample = sampleShapes(srcMeshPaths)
     initPos = concatenatePointLists(srcMeshPaths)
-    numVertices = initPos.shape[0]
-    initPos = np.append(initPos,
-                        np.ones([numVertices, 1], dtype = np.float64),
-                        axis = 1)
+    meshCom = np.sum(initPos, axis = 0) / initPos.shape[0]
+    cmds.move(-meshCom[0], -meshCom[1], -meshCom[2], srcMeshNames, relative=True)
+    # data acquisition
+    shapeSample = sampleShapes(srcMeshPaths)
+    initPos = shapeSample[0]
+    numVertices = shapeSample.shape[1]
     neighborVertices = concatenateNeighborLists(srcMeshPaths)
-
+    # initialization
     numJoints, skinIndex, skinWeight, skinMatrix = \
         native.greedyClusterInitialJoints(numJoints, transformType,
                                    initPos, shapeSample,
@@ -209,26 +214,27 @@ def build(numJoints = 4,
     skinWeight = np.append(skinWeight,
                           np.zeros([numVertices, dimAdd], dtype = np.float64),
                          axis = 1)
-
+    # skinning decomposition
     pinput, poutput = native.initNativeModules(initPos, shapeSample,
                                               skinIndex, skinWeight, skinMatrix)
     for it in xrange(numIterations):
         om.MGlobal.displayInfo('Iteration #' + str(it + 1))
         native.updateSkinWeight(pinput, poutput,
-                               skinIndex, skinWeight, skinMatrix)
+                               skinIndex, skinWeight, skinMatrix, neighborVertices)
         native.updateBoneTransform(transformType, pinput, poutput,
                                   skinIndex, skinWeight, skinMatrix)
     for v in xrange(numVertices):
         skinWeight[v] = np.maximum(0.0, skinWeight[v])
         skinWeight[v] /= np.sum(skinWeight[v])
+    # rigging
     dagModifier = om.MDagModifier()
-    skinJoints = []
     clusterCenter = np.zeros([numJoints, 3])
     for j in xrange(numJoints):
         sw = skinWeight.copy()
         sw[np.where(skinIndex != j)] = 0
-        vi = np.argmax(sw, axis = 0)
-        clusterCenter[j] = initPos[vi[0], 0:3]
+        vi = np.argmax(sw) / sw.shape[1]
+        clusterCenter[j] = initPos[vi]
+    skinJoints = []
     for c in xrange(numJoints):
         newJnt = SkinJoint()
         newJnt.name = 'ssdsJoint' + str(c + 1).zfill(2)
@@ -240,13 +246,15 @@ def build(numJoints = 4,
         newJointSL = om.MGlobal.getSelectionListByName(newJnt.name)
         newJnt.path = newJointSL.getDagPath(0)
         skinJoints.append(newJnt)
-
-    # skin binding
+    # binding
     oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
     dstMeshPaths, dstGroup = cloneMeshs(srcMeshPaths)
     for sj in skinJoints:
         cmds.parent(sj.name, dstGroup)
     bakeJointMotion(skinJoints, skinMatrix)
-    bindToSkin(dstMeshPaths, initPos,
-               skinIndex, skinWeight, skinJoints, numMaxInfluences)
+    bindToSkin(dstMeshPaths, skinIndex, skinWeight,
+              skinJoints, numMaxInfluences)
+
+    cmds.move(meshCom[0], meshCom[1], meshCom[2], srcMeshNames, relative=True)
+    cmds.move(meshCom[0], meshCom[1], meshCom[2], 'ssdsResult', relative=True)
     om.MGlobal.displayInfo('Finished')
