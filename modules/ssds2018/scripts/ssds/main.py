@@ -225,9 +225,6 @@ def build(numJoints = 4,
     # skinning decomposition
     pinput, poutput = native.initNativeModules(initPos, shapeSample,
                                               skinIndex, skinWeight, skinMatrix)
-    native.releaseNativeModules(pinput, poutput)
-    pinput, poutput = native.initNativeModules(initPos, shapeSample,
-                                              skinIndex, skinWeight, skinMatrix)
     for it in xrange(numIterations):
         om.MGlobal.displayInfo('Iteration #' + str(it + 1))
         native.updateSkinWeight(pinput, poutput)
