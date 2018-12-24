@@ -43,18 +43,24 @@ def getMesh():
 
 def bindToSkin(meshPaths, skinIndex, skinWeight,
               skinJnts, numMaxInfluences):
+    asl = om.MSelectionList()
+    asl.clear()
     jntNames = [sj.name for sj in skinJnts]
     for sj in skinJnts:
         m = om.MMatrix(sj.bindPose.tolist())
         m = om.MTransformationMatrix(m)
         om.MFnTransform(sj.path).setTransformation(m)
+        asl.add(sj.path)
     offset = 0
     for meshPath in meshPaths:
         mesh = om.MFnMesh(meshPath)
+        sl = om.MSelectionList(asl)
+        sl.add(meshPath)
+        om.MGlobal.setActiveSelectionList(sl)
         meshName = om.MFnDagNode(mesh.parent(0)).name()
-        skinName = cmds.skinCluster(jntNames, meshName, toSelectedBones = True,
-                                    maximumInfluences = numMaxInfluences,
-                                    name = meshName + 'Cluster')[0]
+        skinName = cmds.skinCluster(maximumInfluences = numMaxInfluences,
+                                    name = meshName + 'Cluster',
+                                    toSelectedBones = True)[0]
         skinObj = om.MGlobal.getSelectionListByName(skinName).getDependNode(0)
         skin = oma.MFnSkinCluster(skinObj)
         vertexIndices = om.MIntArray(mesh.numVertices, 0)
@@ -73,7 +79,6 @@ def bindToSkin(meshPaths, skinIndex, skinWeight,
             for j, w in zip(skinIndex[offset + v], skinWeight[offset + v]):
                 if j >= 0:
                     weights[v * numInfDags + j] = w
-
         skin.setWeights(meshPath, vertexComp, infIndices, weights)
         offset += mesh.numVertices 
         skin.findPlug('deformUserNormals', True).setBool(False)
@@ -87,8 +92,12 @@ def cloneMeshs(meshPaths):
     for path in meshPaths:
         mesh = om.MFnMesh(path)
         meshName = om.MFnDagNode(mesh.parent(0)).name()
-        cloneMeshName = 'ssds_' + meshName
-        cmds.duplicate(mesh.name(), returnRootsOnly = True, name = cloneMeshName)
+        cloneMeshName = 'ssds:' + meshName
+        sl = om.MSelectionList();
+        sl.clear()
+        sl.add(path)
+        om.MGlobal.setActiveSelectionList(sl)
+        cmds.duplicate(returnRootsOnly = True, name = cloneMeshName, renameChildren = True)
         cmds.parent(cloneMeshName, cloneGroup)
         cmds.setAttr(cloneMeshName + '.inheritsTransform', False)
         cloneMeshSL = om.MGlobal.getSelectionListByName(cloneMeshName)
@@ -188,16 +197,15 @@ def build(numJoints = 4,
     srcMeshNames = []
     for p in srcMeshPaths:
         srcMeshNames.append(om.MFnMesh(p).name())
-    om.MGlobal.displayInfo('SSDS 2018.11.15')
+    om.MGlobal.displayInfo('SSDS 2018.12.25')
     om.MGlobal.displayInfo(' # joints: ' + str(numJoints))
     om.MGlobal.displayInfo(' transform type: ' + str(transformType))
     
-    # move its center of mass to the world origin
-    oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
-    initPos = concatenatePointLists(srcMeshPaths)
-    meshCom = np.sum(initPos, axis = 0) / initPos.shape[0]
-    cmds.move(-meshCom[0], -meshCom[1], -meshCom[2], srcMeshNames, relative=True)
+    if not cmds.namespace(exists = 'ssds'):
+        cmds.namespace(add = 'ssds')
+    
     # data acquisition
+    oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
     shapeSample = sampleShapes(srcMeshPaths)
     initPos = shapeSample[0]
     numVertices = shapeSample.shape[1]
@@ -217,12 +225,15 @@ def build(numJoints = 4,
     # skinning decomposition
     pinput, poutput = native.initNativeModules(initPos, shapeSample,
                                               skinIndex, skinWeight, skinMatrix)
+    native.releaseNativeModules(pinput, poutput)
+    pinput, poutput = native.initNativeModules(initPos, shapeSample,
+                                              skinIndex, skinWeight, skinMatrix)
     for it in xrange(numIterations):
         om.MGlobal.displayInfo('Iteration #' + str(it + 1))
-        native.updateSkinWeight(pinput, poutput,
-                               skinIndex, skinWeight, skinMatrix, neighborVertices)
-        native.updateBoneTransform(transformType, pinput, poutput,
-                                  skinIndex, skinWeight, skinMatrix)
+        native.updateSkinWeight(pinput, poutput)
+        native.updateBoneTransform(transformType, pinput, poutput)
+    native.retrieveResult(pinput, poutput, skinIndex, skinWeight, skinMatrix)
+    native.releaseNativeModules(pinput, poutput)
     for v in xrange(numVertices):
         skinWeight[v] = np.maximum(0.0, skinWeight[v])
         skinWeight[v] /= np.sum(skinWeight[v])
@@ -237,7 +248,7 @@ def build(numJoints = 4,
     skinJoints = []
     for c in xrange(numJoints):
         newJnt = SkinJoint()
-        newJnt.name = 'ssdsJoint' + str(c + 1).zfill(2)
+        newJnt.name = 'ssds:Joint' + str(c + 1).zfill(2)
         newJnt.bindPose = np.eye(4)
         newJnt.bindPose[3, 0:3] = clusterCenter[c]
         newJntObj = dagModifier.createNode('joint', om.MObject.kNullObj)
@@ -252,9 +263,8 @@ def build(numJoints = 4,
     for sj in skinJoints:
         cmds.parent(sj.name, dstGroup)
     bakeJointMotion(skinJoints, skinMatrix)
+    print skinWeight
     bindToSkin(dstMeshPaths, skinIndex, skinWeight,
               skinJoints, numMaxInfluences)
 
-    cmds.move(meshCom[0], meshCom[1], meshCom[2], srcMeshNames, relative=True)
-    cmds.move(meshCom[0], meshCom[1], meshCom[2], 'ssdsResult', relative=True)
     om.MGlobal.displayInfo('Finished')
