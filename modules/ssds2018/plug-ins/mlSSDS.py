@@ -7,7 +7,7 @@ def maya_useNewAPI(): pass
 
 
 def initializePlugin(plugin):
-    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.2018.11.15')
+    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.2019.1.21')
     try:
         createUI()
     except: raise
@@ -50,6 +50,7 @@ uiNumJointsName = ('SsdsNumJointsLayout', 'SsdsNumJointsField')
 uiNumIterationsName = ('SsdsNumIterationsLayout', 'SsdsNumIterationsField')
 uiTransformRadioCollectionName = 'SsdsTransformRadioCollection'
 uiTransformNames = ('SsdsTransformT', 'SsdsTransformRT', 'SsdsTransformSRT')
+uiConcentrateName = ('SsdsConcentrateLayout', 'SsdsConcentrateField')
 
 
 def invokeBuild(arg):
@@ -58,17 +59,19 @@ def invokeBuild(arg):
     numIterations = cmds.intField(uiNumIterationsName[1], query = True, value = True)
     transformStr = cmds.radioCollection(uiTransformRadioCollectionName, query = True, select = True)
     transformType = uiTransformNames.index(transformStr)
+    concentrate = cmds.floatField(uiConcentrateName[1], query = True, value = True)
 
     cmds.undoInfo(openChunk = True)
-    try:
-        ssds.build(numJoints = numJoints,
-                    transformType = transformType,
-                    numMaxInfluences = maxInfluence,
-                    numIterations = numIterations)
-    except Exception as e:
-        raise e
-    finally:
-        cmds.undoInfo(closeChunk = True)
+    #try:
+    ssds.build(numJoints = numJoints,
+                transformType = transformType,
+                numMaxInfluences = maxInfluence,
+                numIterations = numIterations,
+                concentrate = concentrate)
+    #except Exception as e:
+    #    raise e
+    #finally:
+    #    cmds.undoInfo(closeChunk = True)
 
 
 def showBuildWindow(arg):
@@ -84,7 +87,7 @@ def showBuildWindow(arg):
                    columnWidth2 = (labelWidth, fieldWidth),
                    columnAlign2 = ('right', 'right'))
     cmds.text(label = '# Joints')
-    cmds.intField(uiNumJointsName[1], minValue = 0, maxValue = 100, value = 0, width = fieldWidth)
+    cmds.intField(uiNumJointsName[1], minValue = 0, maxValue = 100, value = 1, width = fieldWidth)
     cmds.setParent('..')
 
     # max influences
@@ -115,6 +118,14 @@ def showBuildWindow(arg):
     cmds.radioButton(uiTransformNames[2], label = 'S+R+T')
     cmds.radioCollection(uiTransformRadioCollectionName, edit = True, select = uiTransformNames[2])
     cmds.setParent(uiFormLayoutName)
+
+    # concentrate
+    cmds.rowLayout(uiConcentrateName[0], numberOfColumns = 2,
+                   columnWidth2 = (labelWidth, fieldWidth),
+                   columnAlign2 = ('right', 'right'))
+    cmds.text(label = 'Concentrate')
+    cmds.floatField(uiConcentrateName[1], minValue = 0, maxValue = 100, value = 1.0, precision = 3, width = fieldWidth)
+    cmds.setParent('..')
 
     # build
     cmds.button(uiBuildButtonName, label='Build', command = invokeBuild, width = labelWidth + fieldWidth)

@@ -41,6 +41,42 @@ def getMesh():
     return meshPaths
 
 
+def concatenatePointLists(meshPaths):
+    retval = np.empty([0, 3])
+    for path in meshPaths:
+        mesh = om.MFnMesh(path)
+        points = mesh.getPoints(om.MSpace.kWorld)
+        points = np.array([[p.x, p.y, p.z] for p in points])
+        retval = np.append(retval, points.reshape(-1, 3), axis = 0)
+    return retval
+
+
+def concatenateNeighborLists(meshPaths):
+    neighbor = []
+    for path in meshPaths:
+        mesh = om.MFnMesh(path)
+        _, indices = mesh.getTriangles()
+        offset = len(neighbor)
+        neighbor = neighbor + [set() for v in xrange(mesh.numVertices)]
+        for l in xrange(len(indices) / 3):
+            i0 = indices[l * 3 + 0] + offset
+            i1 = indices[l * 3 + 1] + offset
+            i2 = indices[l * 3 + 2] + offset
+            neighbor[i0].add(i1)
+            neighbor[i0].add(i2)
+            neighbor[i1].add(i0)
+            neighbor[i1].add(i2)
+            neighbor[i2].add(i0)
+            neighbor[i2].add(i1)
+    maxlen = 0
+    for i in xrange(len(neighbor)):
+        maxlen = max(maxlen, len(neighbor[i]))
+    retval = -np.ones([len(neighbor), maxlen], dtype = np.longlong)
+    for i in xrange(len(neighbor)):
+        retval[i, 0:len(neighbor[i])] = list(neighbor[i])
+    return retval
+
+
 def bindToSkin(meshPaths, skinIndex, skinWeight,
               skinJnts, numMaxInfluences):
     asl = om.MSelectionList()
@@ -107,42 +143,6 @@ def cloneMeshs(meshPaths):
     return cloneMeshPaths, cloneGroup
 
 
-def concatenatePointLists(meshPaths):
-    retval = np.empty([0, 3])
-    for path in meshPaths:
-        mesh = om.MFnMesh(path)
-        points = mesh.getPoints(om.MSpace.kWorld)
-        points = np.array([[p.x, p.y, p.z] for p in points])
-        retval = np.append(retval, points.reshape(-1, 3), axis = 0)
-    return retval
-
-
-def concatenateNeighborLists(meshPaths):
-    neighbor = []
-    for path in meshPaths:
-        mesh = om.MFnMesh(path)
-        _, indices = mesh.getTriangles()
-        offset = len(neighbor)
-        neighbor = neighbor + [set() for v in xrange(mesh.numVertices)]
-        for l in xrange(len(indices) / 3):
-            i0 = indices[l * 3 + 0] + offset
-            i1 = indices[l * 3 + 1] + offset
-            i2 = indices[l * 3 + 2] + offset
-            neighbor[i0].add(i1)
-            neighbor[i0].add(i2)
-            neighbor[i1].add(i0)
-            neighbor[i1].add(i2)
-            neighbor[i2].add(i0)
-            neighbor[i2].add(i1)
-    maxlen = 0
-    for i in xrange(len(neighbor)):
-        maxlen = max(maxlen, len(neighbor[i]))
-    retval = -np.ones([len(neighbor), maxlen], dtype = np.longlong)
-    for i in xrange(len(neighbor)):
-        retval[i, 0:len(neighbor[i])] = list(neighbor[i])
-    return retval
-
-
 def sampleShapes(meshPaths):
     startTime = oma.MAnimControl.animationStartTime()
     endTime = oma.MAnimControl.animationEndTime()
@@ -159,89 +159,74 @@ def sampleShapes(meshPaths):
     return shapeSample
 
 
-def bakeJointMotion(skinJoints,
-                    skinMatrix):
+def bakeJointMotion(skinJoints, skinMatrix):
     asl = om.MSelectionList()
-    frame = 0
-    startTime = oma.MAnimControl.animationStartTime()
-    endTime = oma.MAnimControl.animationEndTime()
-    ctime = startTime
-    oma.MAnimControl.setCurrentTime(ctime)
-    for jid, sj in enumerate(skinJoints):
-        m = om.MMatrix(sj.bindPose.tolist())
-        m = om.MTransformationMatrix(m)
-        om.MFnTransform(sj.path).setTransformation(m)
+    for sj in skinJoints:
         asl.add(sj.path)
     om.MGlobal.setActiveSelectionList(asl)
-    cmds.setKeyframe()
-
-    while ctime < endTime:
-        frame = frame + 1
-        ctime = ctime + 1
+    startTime = oma.MAnimControl.animationStartTime()
+    endTime = oma.MAnimControl.animationEndTime()
+    frame = 0
+    ctime = startTime
+    oma.MAnimControl.setCurrentTime(ctime)
+    while ctime <= endTime:
         oma.MAnimControl.setCurrentTime(ctime)
         for jid, sj in enumerate(skinJoints):
             m = om.MMatrix(np.dot(sj.bindPose, skinMatrix[jid, frame]).tolist())
             m = om.MTransformationMatrix(m)
             om.MFnTransform(sj.path).setTransformation(m)
         cmds.setKeyframe()
+        frame = frame + 1
+        ctime = ctime + 1
     oma.MAnimControl.setCurrentTime(startTime)
 
 
 def build(numJoints = 4,
           transformType = 2,
           numMaxInfluences = 4,
-          numIterations = 5):
+          numIterations = 5,
+          concentrate = 1.0):
     srcMeshPaths = getMesh()
     if len(srcMeshPaths) == 0:
         raise Exception('Select mesh')
     srcMeshNames = []
     for p in srcMeshPaths:
         srcMeshNames.append(om.MFnMesh(p).name())
-    om.MGlobal.displayInfo('SSDS 2018.12.25')
-    om.MGlobal.displayInfo(' # joints: ' + str(numJoints))
-    om.MGlobal.displayInfo(' transform type: ' + str(transformType))
-    
+    om.MGlobal.displayInfo('SSDS 2019.1.21')
+    om.MGlobal.displayInfo(' # joints: '     + str(numJoints))
+    om.MGlobal.displayInfo(' # iterations: ' + str(numIterations))
+    om.MGlobal.displayInfo(' transform: '    + str(transformType))
+    om.MGlobal.displayInfo(' concentrate: '  + str(concentrate))
     if not cmds.namespace(exists = 'ssds'):
-        cmds.namespace(add = 'ssds')
-    
+        cmds.namespace(add = 'ssds')   
     # data acquisition
     oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
     shapeSample = sampleShapes(srcMeshPaths)
     initPos = shapeSample[0]
     numVertices = shapeSample.shape[1]
     neighborVertices = concatenateNeighborLists(srcMeshPaths)
-    # initialization
-    numJoints, skinIndex, skinWeight, skinMatrix = \
-        native.greedyClusterInitialJoints(numJoints, transformType,
-                                   initPos, shapeSample,
-                                   neighborVertices)
-    dimAdd = max(0, min(numJoints, numMaxInfluences) - 1)
-    skinIndex = np.append(skinIndex, 
-                          -np.ones([numVertices, dimAdd], dtype = np.longlong),
-                         axis = 1)
-    skinWeight = np.append(skinWeight,
-                          np.zeros([numVertices, dimAdd], dtype = np.float64),
-                         axis = 1)
+    # initialize native module
+    pinput, poutput = native.initialize(
+        initPos, shapeSample, neighborVertices, numJoints, numMaxInfluences)
     # skinning decomposition
-    pinput, poutput = native.initNativeModules(initPos, shapeSample,
-                                              skinIndex, skinWeight, skinMatrix)
+    numJoints = native.clusterVertices(pinput, poutput, transformType)
     for it in xrange(numIterations):
         om.MGlobal.displayInfo('Iteration #' + str(it + 1))
-        native.updateSkinWeight(pinput, poutput)
-        native.updateBoneTransform(transformType, pinput, poutput)
-    native.retrieveResult(pinput, poutput, skinIndex, skinWeight, skinMatrix)
-    native.releaseNativeModules(pinput, poutput)
+        native.updateSkinWeight(pinput, poutput, concentrate * 1.0e-5)
+        native.updateJointTransform(pinput, poutput, transformType)
+    # data retrieval from native module
+    skinIndex = -np.ones([numVertices, numMaxInfluences], dtype = np.int)
+    skinWeight = np.zeros([numVertices, numMaxInfluences])
+    skinMatrix = np.zeros([numJoints, shapeSample.shape[0], 4, 4])
+    clusterCenter = np.zeros([numJoints, 3])
+    native.retrieveResult(pinput, poutput,
+                          skinIndex, skinWeight, skinMatrix, clusterCenter)
     for v in xrange(numVertices):
         skinWeight[v] = np.maximum(0.0, skinWeight[v])
         skinWeight[v] /= np.sum(skinWeight[v])
-    # rigging
+    native.release(pinput, poutput)
+    # joint creation
     dagModifier = om.MDagModifier()
-    clusterCenter = np.zeros([numJoints, 3])
-    for j in xrange(numJoints):
-        sw = skinWeight.copy()
-        sw[np.where(skinIndex != j)] = 0
-        vi = np.argmax(sw) / sw.shape[1]
-        clusterCenter[j] = initPos[vi]
     skinJoints = []
     for c in xrange(numJoints):
         newJnt = SkinJoint()
@@ -254,14 +239,11 @@ def build(numJoints = 4,
         newJointSL = om.MGlobal.getSelectionListByName(newJnt.name)
         newJnt.path = newJointSL.getDagPath(0)
         skinJoints.append(newJnt)
-    # binding
+    bakeJointMotion(skinJoints, skinMatrix)
+    # skin binding
     oma.MAnimControl.setCurrentTime(oma.MAnimControl.animationStartTime())
     dstMeshPaths, dstGroup = cloneMeshs(srcMeshPaths)
     for sj in skinJoints:
         cmds.parent(sj.name, dstGroup)
-    bakeJointMotion(skinJoints, skinMatrix)
-    print skinWeight
-    bindToSkin(dstMeshPaths, skinIndex, skinWeight,
-              skinJoints, numMaxInfluences)
-
+    bindToSkin(dstMeshPaths, skinIndex, skinWeight, skinJoints, numMaxInfluences)
     om.MGlobal.displayInfo('Finished')
