@@ -185,7 +185,7 @@ def build(numJoints = 4,
           transformType = 2,
           numMaxInfluences = 4,
           numIterations = 5,
-          concentrate = 1.0):
+          concentrate = 0.0):
     srcMeshPaths = getMesh()
     if len(srcMeshPaths) == 0:
         raise Exception('Select mesh')

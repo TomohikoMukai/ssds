@@ -62,16 +62,16 @@ def invokeBuild(arg):
     concentrate = cmds.floatField(uiConcentrateName[1], query = True, value = True)
 
     cmds.undoInfo(openChunk = True)
-    #try:
-    ssds.build(numJoints = numJoints,
-                transformType = transformType,
-                numMaxInfluences = maxInfluence,
-                numIterations = numIterations,
-                concentrate = concentrate)
-    #except Exception as e:
-    #    raise e
-    #finally:
-    #    cmds.undoInfo(closeChunk = True)
+    try:
+        ssds.build(numJoints = numJoints,
+                    transformType = transformType,
+                    numMaxInfluences = maxInfluence,
+                    numIterations = numIterations,
+                    concentrate = concentrate)
+    except Exception as e:
+        raise e
+    finally:
+        cmds.undoInfo(closeChunk = True)
 
 
 def showBuildWindow(arg):
@@ -124,7 +124,7 @@ def showBuildWindow(arg):
                    columnWidth2 = (labelWidth, fieldWidth),
                    columnAlign2 = ('right', 'right'))
     cmds.text(label = 'Concentrate')
-    cmds.floatField(uiConcentrateName[1], minValue = 0, maxValue = 100, value = 1.0, precision = 3, width = fieldWidth)
+    cmds.floatField(uiConcentrateName[1], minValue = 0, maxValue = 100, value = 0.0, precision = 3, width = fieldWidth)
     cmds.setParent('..')
 
     # build
