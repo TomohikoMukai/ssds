@@ -1,13 +1,99 @@
 # -*- coding: utf-8 -*-
 from maya import cmds
 from maya.api import OpenMaya as om
+from maya import OpenMayaUI as omui
 import ssds
+import ssds_ui
+from PySide2.QtCore import * 
+from PySide2.QtGui import *
+from PySide2.QtWidgets import *
+from PySide2.QtUiTools import *
+import shiboken2 as shiboken
 
 def maya_useNewAPI(): pass
 
+RELEASE_DATE = '2020.9.6'
+ssdsUiWindow = None
+
+
+class ssdsUI(QMainWindow):
+    ptr = omui.MQtUtil.mainWindow()
+    parent = shiboken.wrapInstance(long(ptr), QWidget)
+    titleName = 'SSDS v.' + RELEASE_DATE
+
+    def __init__(self, parent = None):
+        super(ssdsUI, self).__init__(self.parent)
+        self.ui = ssds_ui.Ui_Dialog()
+        self.ui.setupUi(self)
+        self.setWindowTitle(self.titleName)
+        self.model = QStringListModel()
+        self.ui.choice.setModel(self.model)
+        self.model.setStringList([])
+        
+    def invokeBuild(self):
+        influences    = self.ui.spinInfluences.value()
+        minNumJoints  = self.ui.spinMinNumJoints.value()
+        maxNumJoints  = self.ui.spinMaxNumJoints.value()
+        numIterations = self.ui.spinIterations.value()
+        smoothness    = self.ui.spinLocality.value()
+        numRings      = 0 if self.ui.radioRing0.isChecked() else (1 if self.ui.radioRing1.isChecked() else 2)
+        uniformSample = self.ui.checkUniform.isChecked()
+
+        transformTypes = []
+        if self.ui.checkT.isChecked():
+            transformTypes.append(0)
+        if self.ui.checkTR.isChecked():
+            transformTypes.append(1)
+        if self.ui.checkTRS.isChecked():
+            transformTypes.append(2)
+
+        cmds.undoInfo(openChunk = True)
+        try:
+            cands = ssds.build(minNumJoints = minNumJoints,
+                       maxNumJoints = maxNumJoints,
+                       transformTypes = transformTypes,
+                       numMaxInfluences = influences,
+                       numIterations = numIterations,
+                       smoothness = smoothness,
+                       numRings = numRings,
+                       uniformSample = uniformSample)
+            if cands is not None:
+                self.model.setStringList(cands)
+                self.ui.choice.setCurrentIndex(self.model.createIndex(len(cands) - 1, 0))
+        except Exception as e:
+            raise e
+        finally:
+            cmds.undoInfo(closeChunk = True)
+
+    def invokeMinNumChanged(self):
+        minNumJoints = self.ui.spinMinNumJoints.value()
+        maxNumJoints = self.ui.spinMaxNumJoints.value()
+        self.ui.spinMaxNumJoints.setValue(max(minNumJoints, maxNumJoints))
+
+    def invokeMaxNumChanged(self):
+        minNumJoints = self.ui.spinMinNumJoints.value()
+        maxNumJoints = self.ui.spinMaxNumJoints.value()
+        self.ui.spinMinNumJoints.setValue(min(minNumJoints, maxNumJoints))
+
+    def invokeSelectChoice(self, modelIndex):
+        cmds.undoInfo(openChunk = True)
+        try:
+            ssds.select(modelIndex.row())
+        except Exception as e:
+            raise e
+        finally:
+            cmds.undoInfo(closeChunk = True)
+
+
+def showUI(arg):
+    global ssdsUiWindow
+    if ssdsUiWindow == None:
+        ssdsUiWindow = ssdsUI()
+    ssdsUiWindow.show()
+
 
 def initializePlugin(plugin):
-    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.2019.1.21')
+    fnPlugin = om.MFnPlugin(plugin, vendor = 'Mukai Lab.', version = 'v.' + RELEASE_DATE)
     try:
         createUI()
     except: raise
@@ -27,7 +113,7 @@ def createUI():
     except:
         cmds.menu('MukaiLab', label = 'MukaiLab')
     cmds.setParent('MukaiLab', menu = True)
-    cmds.menuItem('SSDS', label = 'SSDS', command = showBuildWindow)
+    cmds.menuItem('SSDS', label = 'SSDS', command = showUI)
 
 
 def deleteUI():
@@ -41,97 +127,3 @@ def deleteUI():
     except: pass
 
 
-uiWindowName = 'SsdsWindow'
-uiFormName = 'SsdsWindowForm'
-uiFormLayoutName = 'SsdsFormLayout'
-uiBuildButtonName = 'SsdsBuildButton'
-uiMaxInfluenceName = ('SsdsMaxInfluenceLayout', 'SsdsMaxInfluenceField')
-uiNumJointsName = ('SsdsNumJointsLayout', 'SsdsNumJointsField')
-uiNumIterationsName = ('SsdsNumIterationsLayout', 'SsdsNumIterationsField')
-uiTransformRadioCollectionName = 'SsdsTransformRadioCollection'
-uiTransformNames = ('SsdsTransformT', 'SsdsTransformRT', 'SsdsTransformSRT')
-uiConcentrateName = ('SsdsConcentrateLayout', 'SsdsConcentrateField')
-
-
-def invokeBuild(arg):
-    maxInfluence = cmds.intField(uiMaxInfluenceName[1], query = True, value = True)
-    numJoints = cmds.intField(uiNumJointsName[1], query = True, value = True)
-    numIterations = cmds.intField(uiNumIterationsName[1], query = True, value = True)
-    transformStr = cmds.radioCollection(uiTransformRadioCollectionName, query = True, select = True)
-    transformType = uiTransformNames.index(transformStr)
-    concentrate = cmds.floatField(uiConcentrateName[1], query = True, value = True)
-
-    cmds.undoInfo(openChunk = True)
-    try:
-        ssds.build(numJoints = numJoints,
-                    transformType = transformType,
-                    numMaxInfluences = maxInfluence,
-                    numIterations = numIterations,
-                    concentrate = concentrate)
-    except Exception as e:
-        raise e
-    finally:
-        cmds.undoInfo(closeChunk = True)
-
-
-def showBuildWindow(arg):
-    labelWidth = 100
-    fieldWidth = 100
-
-    cmds.window(uiWindowName, title = 'SSDS')
-    cmds.formLayout(uiFormName)
-    cmds.columnLayout(uiFormLayoutName, rowSpacing = 5)
-
-    # joints
-    cmds.rowLayout(uiNumJointsName[0], numberOfColumns = 2,
-                   columnWidth2 = (labelWidth, fieldWidth),
-                   columnAlign2 = ('right', 'right'))
-    cmds.text(label = '# Joints')
-    cmds.intField(uiNumJointsName[1], minValue = 0, maxValue = 100, value = 1, width = fieldWidth)
-    cmds.setParent('..')
-
-    # max influences
-    cmds.rowLayout(uiMaxInfluenceName[0], numberOfColumns = 2,
-                   columnWidth2 = (labelWidth, fieldWidth),
-                   columnAlign2 = ('right', 'right'))
-    cmds.text(label = 'Max Influences')
-    cmds.intField(uiMaxInfluenceName[1], minValue = 1, maxValue = 8, value = 4, width = fieldWidth)
-    cmds.setParent('..')
-
-    # iterations
-    cmds.rowLayout(uiNumIterationsName[0], numberOfColumns = 2,
-                   columnWidth2 = (labelWidth, fieldWidth),
-                   columnAlign2 = ('right', 'right'))
-    cmds.text(label = '# Iterations')
-    cmds.intField(uiNumIterationsName[1], minValue = 0, maxValue = 100, value = 10, width = fieldWidth)
-    cmds.setParent('..')
-
-    # transform type
-    cmds.rowLayout('SsdsTransformTypeLayout', numberOfColumns = 2,
-                   columnWidth2 = (labelWidth, fieldWidth),
-                   columnAlign2 = ('right', 'right'))
-    cmds.text(label = 'Transform Type')
-    cmds.columnLayout('temporary', rowSpacing = 3)
-    cmds.radioCollection(uiTransformRadioCollectionName)
-    cmds.radioButton(uiTransformNames[0], label = 'T')
-    cmds.radioButton(uiTransformNames[1], label = 'R+T')
-    cmds.radioButton(uiTransformNames[2], label = 'S+R+T')
-    cmds.radioCollection(uiTransformRadioCollectionName, edit = True, select = uiTransformNames[2])
-    cmds.setParent(uiFormLayoutName)
-
-    # concentrate
-    cmds.rowLayout(uiConcentrateName[0], numberOfColumns = 2,
-                   columnWidth2 = (labelWidth, fieldWidth),
-                   columnAlign2 = ('right', 'right'))
-    cmds.text(label = 'Concentrate')
-    cmds.floatField(uiConcentrateName[1], minValue = 0, maxValue = 100, value = 0.0, precision = 3, width = fieldWidth)
-    cmds.setParent('..')
-
-    # build
-    cmds.button(uiBuildButtonName, label='Build', command = invokeBuild, width = labelWidth + fieldWidth)
-    
-    cmds.formLayout(uiFormName, edit = True,
-                    attachForm = [(uiFormLayoutName, 'top', 5),
-                                  (uiFormLayoutName, 'left', 5),
-                                  (uiFormLayoutName, 'right', 5)])
-    cmds.showWindow(uiWindowName)
