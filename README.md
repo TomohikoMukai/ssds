@@ -41,8 +41,8 @@ Windows 10 + Maya 2018 (無印)の環境でのみ開発・動作確認してい�
 
 ## ソースコードについて
 ネイティブコードのビルドには次のライブラリが必要です。
-* Eigen: http://eigen.tuxfamily.org/
-* OSQP: https://osqp.org/
+* Eigen 3.2.10: http://eigen.tuxfamily.org/
+* OSQP 0.6.2: https://osqp.org/
 * numpy: https://numpy.org/
 
 
